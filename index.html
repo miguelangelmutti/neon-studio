@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neón Studio</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%23ff3fa4'/></svg>">
+  <link rel="stylesheet" href="css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "opentype": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/opentype.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header class="barra">
+    <div class="marca"><span class="marca-punto"></span>Neón Studio</div>
+    <div class="barra-acciones">
+      <button id="btn-deshacer" class="btn-icono" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled>↶</button>
+      <button id="btn-rehacer" class="btn-icono" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" disabled>↷</button>
+      <button id="btn-neon" class="btn-icono" title="Ocultar neón" aria-label="Mostrar neón" aria-pressed="true">💡</button>
+      <button id="btn-cotas" class="btn-icono" title="Ocultar medidas" aria-label="Mostrar medidas" aria-pressed="true">📏</button>
+      <button id="btn-encuadrar" class="btn-icono" title="Centrar vista" aria-label="Centrar vista">⌖</button>
+    </div>
+  </header>
+
+  <div class="app">
+    <nav class="secciones" aria-label="Secciones">
+      <button class="seccion activa" data-seccion="diseno"><span>✎</span>Diseño</button>
+      <button class="seccion" data-seccion="canal"><span>▭</span>Canal</button>
+      <button class="seccion" data-seccion="uniones"><span>⛓</span>Uniones</button>
+      <button class="seccion" data-seccion="orificios"><span>◉</span>Orificios</button>
+      <button class="seccion" data-seccion="anclajes"><span>⚓</span>Anclajes</button>
+      <button class="seccion" data-seccion="cortes"><span>✂</span>Cortes</button>
+      <button class="seccion" data-seccion="exportar"><span>⬇</span>Exportar</button>
+    </nav>
+
+    <aside class="panel" id="panel-diseno">
+      <h2>Diseño</h2>
+
+      <div class="segmentado" role="tablist">
+        <button role="tab" data-origen="texto" aria-selected="true">Texto</button>
+        <button role="tab" data-origen="svg" aria-selected="false">Logo SVG</button>
+      </div>
+
+      <div id="grupo-texto">
+        <label class="campo">
+          <span>Texto del cartel</span>
+          <textarea id="in-texto" rows="3" spellcheck="false"></textarea>
+        </label>
+
+        <div class="campo">
+          <span id="lbl-fuente">Tipografía</span>
+          <div class="selector-fuente">
+            <button id="btn-fuente" aria-haspopup="listbox" aria-labelledby="lbl-fuente btn-fuente"></button>
+            <ul id="lista-fuentes" role="listbox" hidden></ul>
+          </div>
+        </div>
+
+        <div class="fila">
+          <label class="campo">
+            <span>Alineación</span>
+            <select id="in-alineacion">
+              <option value="izquierda">Izquierda</option>
+              <option value="centro">Centro</option>
+              <option value="derecha">Derecha</option>
+            </select>
+          </label>
+          <label class="campo">
+            <span>Interlineado <output id="out-interlineado"></output></span>
+            <input id="in-interlineado" type="range" min="0.7" max="1.8" step="0.05">
+          </label>
+        </div>
+      </div>
+
+      <div id="grupo-svg" hidden>
+        <label class="soltar" id="zona-svg">
+          <input id="in-svg" type="file" accept=".svg,image/svg+xml" hidden>
+          <strong>Elegí o soltá un archivo SVG</strong>
+          <small id="svg-nombre">Se usan las formas con relleno</small>
+        </label>
+      </div>
+
+      <label class="campo">
+        <span>Recorrido del neón</span>
+        <select id="in-modo">
+          <option value="contorno">Contorno: sigue el borde de cada letra</option>
+          <option value="centro">Centro: un solo trazo por el medio</option>
+        </select>
+      </label>
+      <p class="ayuda" id="ayuda-modo"></p>
+
+      <label class="check">
+        <input id="in-cortar" type="checkbox">
+        <span>Unir letras que se superponen<small>El neón recorre sólo el borde exterior del conjunto.</small></span>
+      </label>
+
+      <div class="campo">
+        <span>Ancho del cartel</span>
+        <div class="rango-numero">
+          <input id="in-ancho-rango" type="range" min="50" max="2000" step="10" aria-label="Ancho del cartel">
+          <label class="numero"><input id="in-ancho" type="number" min="50" max="2000" step="1" aria-label="Ancho en milímetros"><span>mm</span></label>
+        </div>
+      </div>
+
+      <div class="fila">
+        <label class="campo">
+          <span>Color de la base</span>
+          <input id="in-color-base" type="color">
+        </label>
+        <label class="check check-centro">
+          <input id="in-aristas" type="checkbox">
+          <span>Marcar aristas</span>
+        </label>
+      </div>
+    </aside>
+
+    <aside class="panel" id="panel-canal" hidden>
+      <h2>Canal</h2>
+      <p class="ayuda-panel">Perfil en U que se imprime y donde se encastra el neón flex.</p>
+
+      <label class="campo">
+        <span>Neón flex</span>
+        <select id="in-preset-neon">
+          <option value="6x12">6 × 12 mm</option>
+          <option value="8x16">8 × 16 mm</option>
+          <option value="10x20">10 × 20 mm</option>
+          <option value="personalizado">Personalizado</option>
+        </select>
+      </label>
+
+      <svg id="corte-canal" class="corte" viewBox="0 0 260 180" role="img" aria-label="Corte transversal del canal"></svg>
+
+      <label class="campo">
+        <span>Ancho de la ranura <output></output></span>
+        <input type="range" data-medida="anchoCanal" min="4" max="12" step="0.1">
+      </label>
+      <label class="campo">
+        <span>Alto del neón (vista previa) <output></output></span>
+        <input type="range" data-medida="altoNeon" min="4" max="25" step="0.5">
+      </label>
+      <label class="campo">
+        <span>Grosor de pared <output></output></span>
+        <input type="range" data-medida="pared" min="0.5" max="5" step="0.1">
+      </label>
+      <label class="campo">
+        <span>Grosor del fondo <output></output></span>
+        <input type="range" data-medida="piso" min="0.5" max="5" step="0.1">
+      </label>
+      <label class="campo">
+        <span>Alto de las paredes <output></output></span>
+        <input type="range" data-medida="alturaCanal" min="1" max="15" step="0.5">
+      </label>
+
+      <div class="resumen" id="resumen-canal"></div>
+    </aside>
+
+    <aside class="panel" id="panel-orificios" hidden>
+      <h2>Orificios</h2>
+      <p class="ayuda-panel">Agujeros que atraviesan el canal para pasar los cables del neón hacia atrás del cartel.
+        Mientras estás en esta sección el neón se oculta, para ver dónde quedan.</p>
+
+      <label class="check">
+        <input id="in-colocar-orificios" type="checkbox">
+        <span>Colocar orificios con el mouse<small>Pasá el mouse por el cartel: el marcador <b class="verde">verde</b> se pega
+          al centro del canal más cercano y un click hace el orificio. Sobre un orificio el marcador se pone
+          <b class="rojo">rojo</b> y un click lo quita. Arrastrar sigue girando la vista.</small></span>
+      </label>
+
+      <label class="campo">
+        <span>Diámetro <output id="out-diametro-orificio"></output></span>
+        <input id="in-diametro-orificio" type="range" min="2" max="15" step="0.5">
+      </label>
+      <p class="ayuda" id="aviso-diametro"></p>
+
+      <button id="btn-orificios-inicio" class="btn-texto">Orificio al inicio de cada tira</button>
+      <p class="ayuda">Pone uno donde arranca cada tramo de neón: el comienzo de un trazo abierto
+        o el punto más bajo de un contorno cerrado (como el interior de la "o").</p>
+
+      <div class="resumen">
+        <span id="resumen-orificios"></span>
+        <button id="btn-quitar-orificios" class="btn-texto">Quitar todos</button>
+      </div>
+    </aside>
+
+    <aside class="panel" id="panel-anclajes" hidden>
+      <h2>Anclajes</h2>
+      <p class="ayuda-panel">Orejitas con un orificio, pegadas al borde del cartel, para atornillarlo a la pared o colgarlo.</p>
+
+      <label class="check">
+        <input id="in-colocar-anclajes" type="checkbox">
+        <span>Colocar orejitas con el mouse<small>Pasá el mouse cerca del borde, por fuera del cartel o por dentro de la
+          figura (por ejemplo, adentro de una O grande): la orejita <b class="verde">verde</b> se pega al borde más cercano
+          y un click la agrega. Sobre una existente se pone <b class="rojo">roja</b> y un click la quita.</small></span>
+      </label>
+
+      <div class="fila">
+        <label class="campo">
+          <span>Forma</span>
+          <select id="in-forma-anclaje">
+            <option value="semi">Semicírculo</option>
+            <option value="recta">Recta</option>
+          </select>
+        </label>
+        <label class="campo">
+          <span>Altura</span>
+          <select id="in-altura-anclaje">
+            <option value="base">Sólo la base</option>
+            <option value="completa">Toda la altura</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="campo">
+        <span>Orificio <output id="out-diametro-anclaje"></output></span>
+        <input id="in-diametro-anclaje" type="range" min="2" max="12" step="0.5">
+      </label>
+      <label class="campo">
+        <span>Ancho de la orejita <output id="out-ancho-anclaje"></output></span>
+        <input id="in-ancho-anclaje" type="range" min="8" max="30" step="1">
+      </label>
+      <p class="ayuda" id="aviso-ancho-anclaje"></p>
+
+      <div class="resumen">
+        <span id="resumen-anclajes"></span>
+        <button id="btn-quitar-anclajes" class="btn-texto">Quitar todas</button>
+      </div>
+    </aside>
+
+    <aside class="panel" id="panel-cortes" hidden>
+      <h2>Cortes</h2>
+      <p class="ayuda-panel">Si el cartel no entra en tu impresora, se divide en columnas y filas.
+        Cada corte va donde cruza menos material y en cada cruce lleva una cola de milano:
+        macho en la pieza de la izquierda o de arriba, hembra en la vecina.</p>
+
+      <label class="check">
+        <input id="in-cortar-cama" type="checkbox">
+        <span>Dividir en piezas si no entra en la cama</span>
+      </label>
+
+      <fieldset id="controles-cortes" class="grupo-controles">
+        <label class="campo">
+          <span>Impresora</span>
+          <select id="in-impresora">
+            <option value="256x256">Bambu Lab X1 / P1 / A1 (256 × 256)</option>
+            <option value="250x210">Prusa MK4 / MK3 (250 × 210)</option>
+            <option value="220x220">Creality Ender 3 (220 × 220)</option>
+            <option value="235x235">Creality Ender 3 V2 / S1 (235 × 235)</option>
+            <option value="180x180">Bambu A1 mini / Prusa Mini (180 × 180)</option>
+            <option value="personalizada">Personalizada</option>
+          </select>
+        </label>
+
+        <div class="campo">
+          <span>Área de impresión</span>
+          <div class="cama">
+            <label class="numero"><input id="in-cama-x" type="number" min="50" max="2000" step="1" aria-label="Ancho de la cama en mm"><span>mm</span></label>
+            <span class="por">×</span>
+            <label class="numero"><input id="in-cama-y" type="number" min="50" max="2000" step="1" aria-label="Profundidad de la cama en mm"><span>mm</span></label>
+          </div>
+          <small class="ayuda-chica">Se recuerda en este navegador. Se dejan 5 mm libres por lado.</small>
+        </div>
+
+        <label class="campo">
+          <span>Holgura del encastre <output id="out-holgura"></output></span>
+          <input id="in-holgura" type="range" min="0" max="0.6" step="0.05">
+        </label>
+
+        <label class="check">
+          <input id="in-separadas" type="checkbox">
+          <span>Ver piezas separadas</span>
+        </label>
+
+        <div class="resumen" id="resumen-cortes"></div>
+      </fieldset>
+    </aside>
+
+    <aside class="panel" id="panel-exportar" hidden>
+      <h2>Exportar</h2>
+      <p class="ayuda-panel">El canal con sus uniones, listo para laminar: STL binario en milímetros, con Z hacia arriba y apoyado en la cama.</p>
+
+      <label class="campo">
+        <span>Nombre del archivo</span>
+        <span class="numero texto-archivo"><input id="in-nombre-archivo" type="text" spellcheck="false"><span>.stl</span></span>
+      </label>
+
+      <div class="resumen" id="resumen-exportar"></div>
+
+      <button id="btn-descargar-stl" class="btn-primario">Descargar STL</button>
+      <p class="ayuda" id="estado-exportar" aria-live="polite"></p>
+    </aside>
+
+    <aside class="panel" id="panel-uniones" hidden>
+      <h2>Uniones</h2>
+      <p class="ayuda-panel">Puentes que conectan las letras y las partes sueltas (como el interior de la D o la A)
+        para que el cartel salga de la impresora en una sola pieza.</p>
+
+      <label class="check">
+        <input id="in-unir" type="checkbox">
+        <span>Unir todo en una sola pieza<small>Se agrega el mínimo de uniones, cada una en el punto más cercano entre dos piezas.</small></span>
+      </label>
+
+      <fieldset id="controles-union" class="grupo-controles">
+        <label class="campo">
+          <span>Ancho de la unión <output id="out-ancho-union"></output></span>
+          <input id="in-ancho-union" type="range" min="2" max="15" step="1">
+        </label>
+
+        <label class="campo">
+          <span>Altura de la unión</span>
+          <select id="in-altura-union">
+            <option value="completa">Completa: hasta arriba de las paredes</option>
+            <option value="base">Baja: sólo a la altura del piso</option>
+          </select>
+        </label>
+
+        <label class="check">
+          <input id="in-editar-uniones" type="checkbox">
+          <span>Editar con el mouse<small>Pasá el mouse por el cartel: una unión en <b class="rojo">rojo</b> se quita con un click;
+            en un hueco entre piezas aparece en <b class="verde">verde</b> una nueva y un click la agrega.</small></span>
+        </label>
+
+        <div class="resumen">
+          <span id="resumen-uniones"></span>
+          <button id="btn-restaurar-uniones" class="btn-texto">Volver a las automáticas</button>
+        </div>
+      </fieldset>
+    </aside>
+
+    <main class="visor">
+      <div id="lienzo"></div>
+      <div class="medidas" id="medidas" hidden></div>
+      <div class="aviso" id="aviso" hidden></div>
+      <div class="ayuda-visor">Izq: rotar · Der: mover · Rueda: zoom</div>
+    </main>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
