@@ -27,6 +27,13 @@ function dentro(formas, [x, y]) {
  */
 export function bordeCercano(formas, p, maxDist) {
   if (dentro(formas, p)) return null;
+  const borde = pegarAlBorde(formas, p);
+  return borde && borde.dist <= maxDist ? borde : null;
+}
+
+// Punto del borde más cercano a p (esté donde esté p) con su normal hacia afuera: { punto, normal, dist }.
+// Sirve para volver a pegar una orejita guardada cuando el diseño cambia.
+export function pegarAlBorde(formas, p) {
   let mejor = null;
   for (const f of formas) for (const a of [f.exterior, ...f.agujeros]) {
     for (let i = 0; i < a.length; i++) {
@@ -39,7 +46,7 @@ export function bordeCercano(formas, p, maxDist) {
       if (!mejor || dist < mejor.dist) mejor = { punto: q, dist, dx, dy };
     }
   }
-  if (!mejor || mejor.dist > maxDist) return null;
+  if (!mejor) return null;
   // Normal del tramo, del lado de afuera del material
   const l = Math.hypot(mejor.dx, mejor.dy);
   let n = [-mejor.dy / l, mejor.dx / l];

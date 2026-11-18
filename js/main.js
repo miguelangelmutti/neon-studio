@@ -1,6 +1,6 @@
 import { cargarFuente, textoAGrupos, svgAGrupos, construirModelo, restarFormas, unirFormas } from './geometria.js';
 import { puntoEnRecorrido, iniciosDeTiras, formasOrificios } from './orificios.js';
-import { bordeCercano, orejita, orejitaEn, anchoEfectivo } from './anclajes.js';
+import { bordeCercano, pegarAlBorde, orejita, orejitaEn, anchoEfectivo } from './anclajes.js';
 import { Visor } from './escena.js';
 import { calcularUniones, previaUnion, distanciaASegmento } from './uniones.js';
 import { capasDeImpresion, resumenImpresion, generarStl, descargar, nombreArchivo } from './exportar.js';
@@ -228,25 +228,36 @@ function pintarControles() {
 }
 
 // Centros de los orificios en mm y sus formas (círculos que atraviesan todo el canal)
-const centrosOrificios = () => estado.orificios.map(([x, y]) => [x * estado.ancho, y * estado.ancho]);
-const formasDeOrificios = () => formasOrificios(centrosOrificios(), estado.diametroOrificio);
+// Se vuelven a pegar al centro del canal más cercano del modelo actual, así siguen unidos
+// aunque cambie el diseño (otro texto, tipografía o medidas del canal).
+const centrosOrificios = modelo => estado.orificios.map(([x, y]) => {
+  const p = [x * estado.ancho, y * estado.ancho];
+  return puntoEnRecorrido(modelo.neones, p)?.punto ?? p;
+});
+const formasDeOrificios = modelo => formasOrificios(centrosOrificios(modelo), estado.diametroOrificio);
 
-// Orejitas de anclaje en mm
-const anclajesMm = () => estado.anclajes.map(([x, y, nx, ny]) => ({ punto: [x * estado.ancho, y * estado.ancho], normal: [nx, ny] }));
+// Orejitas de anclaje en mm, vueltas a pegar al borde más cercano del modelo actual
+const anclajesMm = modelo => estado.anclajes.map(([x, y, nx, ny]) => {
+  const p = [x * estado.ancho, y * estado.ancho];
+  const borde = pegarAlBorde(modelo.formasPiso, p);
+  if (!borde) return { punto: p, normal: [nx, ny] };
+  // Si sigue sobre el borde (el diseño no cambió), se respeta la normal guardada
+  return borde.dist < 0.01 ? { punto: borde.punto, normal: [nx, ny] } : borde;
+});
 const opAnclaje = () => ({ forma: estado.formaAnclaje, ancho: estado.anchoAnclaje, diametro: estado.diametroAnclaje });
 const altoAnclaje = () => (estado.alturaAnclaje === 'completa' ? estado.piso + estado.alturaCanal : estado.piso);
 
 // Lo que se suma y se resta al canal: orejitas (al fondo y, si van a toda la altura, a las paredes,
 // sin tapar ranuras de neón) y todos los agujeros (orificios para cables y de las orejitas)
 function extrasDe(modelo) {
-  const orejas = anclajesMm().map(a => orejita(a, opAnclaje()));
+  const orejas = anclajesMm(modelo).map(a => orejita(a, opAnclaje()));
   const orejitas = orejas.map(o => o.forma);
   let extraParedes = [];
   if (orejitas.length && estado.alturaAnclaje === 'completa') {
     modelo.ranura ??= restarFormas(modelo.formasPiso, modelo.formasParedes);
     extraParedes = restarFormas(orejitas, modelo.ranura);
   }
-  return { agujeros: [...formasDeOrificios(), ...orejas.map(o => o.orificio)], extraFondo: orejitas, extraParedes };
+  return { agujeros: [...formasDeOrificios(modelo), ...orejas.map(o => o.orificio)], extraFondo: orejitas, extraParedes };
 }
 
 const mm = v => Number(v).toLocaleString('es-AR', { maximumFractionDigits: 1 });
@@ -403,7 +414,7 @@ async function regenerar() {
         altoUnion: estado.alturaUnion === 'base' ? estado.piso : estado.piso + estado.alturaCanal,
         ajustarCamara,
       });
-      if (seccion === 'orificios') visor.marcarOrificios(centrosOrificios(), estado.diametroOrificio, estado.piso + estado.alturaCanal);
+      if (seccion === 'orificios') visor.marcarOrificios(centrosOrificios(modelo), estado.diametroOrificio, estado.piso + estado.alturaCanal);
     }
     pintarResumenUniones();
     if (seccion === 'cortes') pintarCortes();
@@ -619,7 +630,7 @@ ui.quitarOrificios.addEventListener('click', () => cambiar({ orificios: [] }));
 ui.orificiosInicio.addEventListener('click', () => {
   if (!actual) return;
   // Sin repetir donde ya hay un orificio
-  const centros = centrosOrificios();
+  const centros = centrosOrificios(actual.modelo);
   const nuevos = iniciosDeTiras(actual.modelo.neones)
     .filter(p => !centros.some(c => Math.hypot(c[0] - p[0], c[1] - p[1]) < estado.diametroOrificio))
     .map(([x, y]) => [x / estado.ancho, y / estado.ancho]);
@@ -688,7 +699,7 @@ function hoverOrificios() {
   const p = visor.puntoEnPiso(ultimoPuntero);
   if (!p) return limpiarHover();
   const d = estado.diametroOrificio, alto = estado.piso + estado.alturaCanal;
-  const centros = centrosOrificios();
+  const centros = centrosOrificios(actual.modelo);
   const cerca = puntoEnRecorrido(actual.modelo.neones, p);
   const enCanal = cerca && cerca.dist <= estado.anchoCanal / 2 + estado.pared + 6;
   // Sobre un orificio: el puntero o el punto del canal al que se pegaría el marcador
@@ -712,7 +723,7 @@ function hoverAnclajes() {
   if (!colocarAnclajes || !actual || !ultimoPuntero) return limpiarHover();
   const p = visor.puntoEnPiso(ultimoPuntero);
   if (!p) return limpiarHover();
-  const op = opAnclaje(), lista = anclajesMm(), alto = altoAnclaje();
+  const op = opAnclaje(), lista = anclajesMm(actual.modelo), alto = altoAnclaje();
   const k = orejitaEn(lista, p, op);
   if (k >= 0) {
     const o = orejita(lista[k], op);
