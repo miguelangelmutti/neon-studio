@@ -80,24 +80,37 @@ export function textoAGrupos(fuente, texto, { alineacion = 'centro', interlinead
   return grupos;
 }
 
-// SVG (texto del archivo) → grupos de anillos, un grupo por forma rellena
-export function svgAGrupos(textoSvg) {
+// SVG (texto del archivo) → { grupos, trazos }
+//   grupos: anillos de cada forma con relleno (se procesan como letras: Contorno o Centro)
+//   trazos: líneas de las formas sin relleno y con trazo; son directamente el recorrido del neón
+//           ({ puntos, cerrado }). Se ignoran el grosor del trazo y los guiones (stroke-dasharray).
+export function svgADiseno(textoSvg) {
   const datos = new SVGLoader().parse(textoSvg);
-  const conRelleno = datos.paths.filter(p => {
-    const f = p.userData?.style?.fill;
-    return f && f !== 'none' && f !== 'transparent';
-  });
-  const grupos = [];
-  for (const path of (conRelleno.length ? conRelleno : datos.paths)) {
-    for (const forma of SVGLoader.createShapes(path)) {
-      const { shape, holes } = forma.extractPoints(PASOS_CURVA);
-      const anillos = [shape, ...holes]
-        .filter(a => a.length > 2)
-        .map(a => a.map(v => [v.x, -v.y]));   // SVG tiene y hacia abajo
-      if (anillos.length) grupos.push(anillos);
+  const visible = c => c && c !== 'none' && c !== 'transparent';
+  const grupos = [], trazos = [];
+  for (const path of datos.paths) {
+    const estilo = path.userData?.style ?? {};
+    if (visible(estilo.fill)) {
+      for (const forma of SVGLoader.createShapes(path)) {
+        const { shape, holes } = forma.extractPoints(PASOS_CURVA);
+        const anillos = [shape, ...holes]
+          .filter(a => a.length > 2)
+          .map(a => a.map(v => [v.x, -v.y]));   // SVG tiene y hacia abajo
+        if (anillos.length) grupos.push(anillos);
+      }
+    } else if (visible(estilo.stroke)) {
+      for (const sub of path.subPaths) {
+        const puntos = sub.getPoints(PASOS_CURVA).map(v => [v.x, -v.y])
+          .filter((p, i, a) => i === 0 || Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 1e-6);
+        if (puntos.length < 2) continue;
+        const [a, b] = [puntos[0], puntos[puntos.length - 1]];
+        const cerrado = sub.autoClose || Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-6;
+        if (cerrado && puntos.length > 2 && Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-6) puntos.pop();
+        trazos.push({ puntos, cerrado });
+      }
     }
   }
-  return grupos;
+  return { grupos, trazos };
 }
 
 // ---------- Clipper helpers ----------
@@ -389,16 +402,19 @@ function recorridoCentro(formas, limites, anchoNeon) {
  * El cuerpo del cartel es un canal en U que sigue el recorrido del neón:
  * un piso del ancho del canal y dos paredes que dejan una ranura para el neón.
  * @param grupos  anillos por glifo/forma (unidades arbitrarias, y hacia arriba)
- * @param opciones { anchoMm, modo: 'contorno'|'centro', cortarSuperposiciones, anchoNeon, pared }
+ * @param opciones { anchoMm, modo: 'contorno'|'centro', cortarSuperposiciones, anchoNeon, pared,
+ *                   trazos: [{puntos, cerrado}] recorridos de neón ya dados (trazos de un SVG), mismas unidades }
  * @returns { formasPiso, formasParedes, neones:[{puntos,cerrado}], ancho, alto } en mm, centrado en el origen
  */
 export function construirModelo(grupos, opciones) {
-  const { anchoMm = 600, modo = 'contorno', cortarSuperposiciones = true, anchoNeon = 6, pared = 2 } = opciones;
+  const { anchoMm = 600, modo = 'contorno', cortarSuperposiciones = true, anchoNeon = 6, pared = 2, trazos = [] } = opciones;
   const semiCanal = anchoNeon / 2 + pared;
-  if (!grupos.length) return null;
+  if (!grupos.length && !trazos.length) return null;
 
+  // El ancho pedido es el del dibujo: formas rellenas y líneas centrales de los trazos
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const g of grupos) for (const a of g) for (const [x, y] of a) {
+  const puntosDibujo = [...grupos.flat(), ...trazos.map(t => t.puntos)];
+  for (const a of puntosDibujo) for (const [x, y] of a) {
     if (x < minX) minX = x; if (x > maxX) maxX = x;
     if (y < minY) minY = y; if (y > maxY) maxY = y;
   }
@@ -414,7 +430,9 @@ export function construirModelo(grupos, opciones) {
   const limites = { minX: (minX - cx) * s, maxX: (maxX - cx) * s, minY: (minY - cy) * s, maxY: (maxY - cy) * s };
 
   let neones;
-  if (modo === 'centro') {
+  if (!formasTexto.length) {
+    neones = [];
+  } else if (modo === 'centro') {
     neones = recorridoCentro(formasTexto, limites, anchoNeon);
   } else {
     // El neón sigue el borde de la letra y el canal se centra sobre él: la letra queda
@@ -423,6 +441,21 @@ export function construirModelo(grupos, opciones) {
       .flatMap(f => [f.exterior, ...f.agujeros])
       .filter(a => largo(a, true) > anchoNeon * 2.5 && areaMm2(a) > anchoNeon * anchoNeon * 0.5)
       .map(a => ({ puntos: rdp(a.concat([a[0]]), 0.05).slice(0, -1), cerrado: true }));
+  }
+
+  // Trazos del SVG: la línea del trazo es el recorrido del neón. Se descartan los puntos sueltos
+  // (trazos de largo casi nulo, como "M x y L x y") y los lazos cerrados más chicos que dos anchos
+  // de canal (p. ej. un circulito): el canal los taparía y el neón no puede curvarse tanto.
+  for (const t of trazos) {
+    let puntos = t.puntos.map(([x, y]) => [(x - cx) * s, (y - cy) * s]);
+    puntos = t.cerrado ? rdp(puntos.concat([puntos[0]]), 0.05).slice(0, -1) : rdp(puntos, 0.05);
+    if (puntos.length < 2 || largo(puntos, t.cerrado) <= anchoNeon) continue;
+    if (t.cerrado) {
+      const xs = puntos.map(p => p[0]), ys = puntos.map(p => p[1]);
+      const tam = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+      if (tam < 4 * semiCanal) continue;
+    }
+    neones.push({ puntos, cerrado: t.cerrado && puntos.length > 2 });
   }
 
   // Canal: piso = franja exterior; paredes = franja exterior menos la ranura del neón

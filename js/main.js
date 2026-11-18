@@ -1,4 +1,4 @@
-import { cargarFuente, textoAGrupos, svgAGrupos, construirModelo, restarFormas, unirFormas } from './geometria.js';
+import { cargarFuente, textoAGrupos, svgADiseno, construirModelo, restarFormas, unirFormas } from './geometria.js';
 import { puntoEnRecorrido, iniciosDeTiras, formasOrificios } from './orificios.js';
 import { bordeCercano, pegarAlBorde, orejita, orejitaEn, anchoEfectivo } from './anclajes.js';
 import { Visor } from './escena.js';
@@ -179,7 +179,7 @@ function pintarControles() {
   for (const b of document.querySelectorAll('[data-origen]')) b.setAttribute('aria-selected', b.dataset.origen === estado.origen);
   ui.grupoTexto.hidden = estado.origen !== 'texto';
   ui.grupoSvg.hidden = estado.origen !== 'svg';
-  ui.svgNombre.textContent = estado.svgNombre || 'Se usan las formas con relleno';
+  ui.svgNombre.textContent = estado.svgNombre || 'Formas con relleno o trazos';
   ui.unir.checked = estado.unir;
   ui.controlesUnion.disabled = !estado.unir;
   ui.anchoUnion.value = estado.anchoUnion;
@@ -319,7 +319,7 @@ function avisar(msg) {
 async function regenerar() {
   const id = ++generacion;
   try {
-    let grupos = [];
+    let grupos = [], trazos = [];
     if (estado.origen === 'texto') {
       if (estado.texto.trim()) {
         const f = FUENTES.find(x => x.nombre === estado.fuente) ?? FUENTES[0];
@@ -328,10 +328,10 @@ async function regenerar() {
         grupos = textoAGrupos(fuente, estado.texto, { alineacion: estado.alineacion, interlineado: estado.interlineado });
       }
     } else if (estado.svg) {
-      grupos = svgAGrupos(estado.svg);
+      ({ grupos, trazos } = svgADiseno(estado.svg));
     }
 
-    if (!grupos.length) {
+    if (!grupos.length && !trazos.length) {
       visor.actualizar(null, {});
       actual = null;
       pintarResumenUniones();
@@ -348,6 +348,7 @@ async function regenerar() {
         cortarSuperposiciones: estado.cortar,
         anchoNeon: estado.anchoCanal,
         pared: estado.pared,
+        trazos,
       });
       cacheModelo.clave = clave;
     }

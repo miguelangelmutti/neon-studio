@@ -77,8 +77,15 @@ Qué se escribe o dibuja.
 
 - **Texto / Logo SVG:**
   - **Texto:** se escribe en el cuadro. Admite varias líneas, con `Enter` para cortar.
-  - **Logo SVG:** elegí o soltá un archivo `.svg`. Se usan **sólo las formas con relleno**: si el logo está hecho
-    con trazos (líneas sin relleno), convertilos a contornos en tu editor (Inkscape: *Trazo a camino*).
+  - **Logo SVG:** elegí o soltá un archivo `.svg`. Se leen dos tipos de elementos:
+    - **Formas con relleno:** se tratan como letras, con el modo Contorno o Centro.
+    - **Trazos (líneas sin relleno):** la línea del trazo es directamente el recorrido del neón y el canal se centra
+      sobre ella, sea abierta o cerrada. Es la forma más directa de dibujar un neón.
+    - **Lo que se ignora:** el grosor del trazo y los guiones (`stroke-dasharray`); un trazo punteado sale continuo.
+    - **Lo que se descarta:** los puntos sueltos (trazos de largo casi nulo) y los lazos cerrados más chicos que dos
+      anchos de canal (unos 20 mm), como un circulito de adorno, porque el canal los taparía y el neón no puede curvarse tanto.
+    - **El ancho del cartel** se mide sobre el dibujo (rellenos y líneas centrales de los trazos); el canal suma
+      unos 5 mm por lado.
 - **Tipografía:** 22 fuentes de Google Fonts, primero las manuscritas y después las de bloque.
   Se elige de la lista, que muestra cada una con su estilo, o con las flechas ↑↓ sobre el selector.
 - **Alineación e Interlineado:** para textos de varias líneas (el interlineado va de 0,70 a 1,80).
@@ -236,7 +243,8 @@ Si el cartel no entra en la impresora, se divide en **columnas y filas** con **e
 | `EADDRINUSE` al iniciar | El servidor ya está corriendo en otra ventana: abrí <http://localhost:5173> directamente |
 | "No se pudo trazar el neón con este diseño" | El texto o SVG no tiene formas con relleno válidas, o es demasiado chico: probá otro modo o más ancho |
 | Las letras manuscritas se ven raras en Contorno | Probá desactivar "Unir letras que se superponen" o usar el modo Centro |
-| El SVG no aparece | Asegurate de que las formas tengan **relleno** (no sólo trazo) |
+| El SVG no aparece o le faltan partes | Revisá que las formas tengan relleno o trazo visibles; los circulitos de menos de ~20 mm y los puntos sueltos se descartan a propósito |
+| En modo Centro desaparece un círculo relleno | Un disco no tiene línea central: dibujalo como trazo (círculo sin relleno) o usá el modo Contorno |
 | "Quedan N partes separadas" | Activá "Unir todo en una sola pieza" en Uniones, o agregá una unión a mano |
 | Una pieza no entra en la cama | Revisá el tamaño de la cama en Cortes; si es una pieza muy alargada, achicá el cartel |
 | Se perdió el diseño | El diseño no se guarda al recargar la página: exportá antes de cerrar |

@@ -9,7 +9,8 @@ Corre entero en el navegador: no hay backend ni build, sólo archivos estáticos
 ## Funciones
 
 - **Diseño:**
-  - Texto con 22 tipografías de Google Fonts, o logo SVG.
+  - Texto con 22 tipografías de Google Fonts, o logo SVG: las formas con relleno se tratan como letras
+    y los trazos son directamente el recorrido del neón.
   - Varias líneas, alineación e interlineado.
   - Dos modos de recorrido:
     - **Contorno:** doble contorno; la letra queda hueca.
@@ -61,7 +62,8 @@ js/
 
 ### Cómo se arma el modelo
 
-1. **Contornos:** opentype.js convierte el texto en contornos; los SVG se leen con el SVGLoader de three.js.
+1. **Contornos:** opentype.js convierte el texto en contornos; los SVG se leen con el SVGLoader de three.js
+   (los rellenos como contornos y los trazos como recorridos de neón ya dados).
 2. **Recorrido del neón:**
    - **Contorno:** el propio borde de cada letra.
    - **Centro:** el esqueleto del trazo (Zhang-Suen), simplificado y suavizado.
